@@ -5,6 +5,23 @@ import (
 	"time"
 )
 
+// parseSQLiteTime parses a time string from SQLite which may be in different formats
+func parseSQLiteTime(s string) time.Time {
+	// Try RFC3339 first (what we write for started_at, finished_at)
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t
+	}
+	// Try SQLite datetime format (from datetime('now'))
+	if t, err := time.Parse("2006-01-02 15:04:05", s); err == nil {
+		return t
+	}
+	// Try with timezone
+	if t, err := time.Parse("2006-01-02T15:04:05Z07:00", s); err == nil {
+		return t
+	}
+	return time.Time{}
+}
+
 // EnqueueJob creates a new review job for a single commit
 func (db *DB) EnqueueJob(repoID, commitID int64, gitRef, agent string) (*ReviewJob, error) {
 	result, err := db.Exec(`INSERT INTO review_jobs (repo_id, commit_id, git_ref, agent, status) VALUES (?, ?, ?, ?, 'queued')`,
@@ -101,7 +118,7 @@ func (db *DB) ClaimJob(workerID string) (*ReviewJob, error) {
 	if commitSubject.Valid {
 		job.CommitSubject = commitSubject.String
 	}
-	job.EnqueuedAt, _ = time.Parse(time.RFC3339, enqueuedAt)
+	job.EnqueuedAt = parseSQLiteTime(enqueuedAt)
 	job.Status = JobStatusRunning
 	job.WorkerID = workerID
 	job.StartedAt = &now
@@ -199,7 +216,7 @@ func (db *DB) ListJobs(statusFilter string, limit int) ([]ReviewJob, error) {
 		if commitSubject.Valid {
 			j.CommitSubject = commitSubject.String
 		}
-		j.EnqueuedAt, _ = time.Parse(time.RFC3339, enqueuedAt)
+		j.EnqueuedAt = parseSQLiteTime(enqueuedAt)
 		if startedAt.Valid {
 			t, _ := time.Parse(time.RFC3339, startedAt.String)
 			j.StartedAt = &t
@@ -253,7 +270,7 @@ func (db *DB) GetJobByID(id int64) (*ReviewJob, error) {
 	if commitSubject.Valid {
 		j.CommitSubject = commitSubject.String
 	}
-	j.EnqueuedAt, _ = time.Parse(time.RFC3339, enqueuedAt)
+	j.EnqueuedAt = parseSQLiteTime(enqueuedAt)
 	if startedAt.Valid {
 		t, _ := time.Parse(time.RFC3339, startedAt.String)
 		j.StartedAt = &t

@@ -33,20 +33,20 @@ func (db *DB) GetReviewByJobID(jobID int64) (*Review, error) {
 		return nil, err
 	}
 
-	r.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+	r.CreatedAt = parseSQLiteTime(createdAt)
 	if commitID.Valid {
 		job.CommitID = &commitID.Int64
 	}
 	if commitSubject.Valid {
 		job.CommitSubject = commitSubject.String
 	}
-	job.EnqueuedAt, _ = time.Parse(time.RFC3339, enqueuedAt)
+	job.EnqueuedAt = parseSQLiteTime(enqueuedAt)
 	if startedAt.Valid {
-		t, _ := time.Parse(time.RFC3339, startedAt.String)
+		t := parseSQLiteTime(startedAt.String)
 		job.StartedAt = &t
 	}
 	if finishedAt.Valid {
-		t, _ := time.Parse(time.RFC3339, finishedAt.String)
+		t := parseSQLiteTime(finishedAt.String)
 		job.FinishedAt = &t
 	}
 	if workerID.Valid {
@@ -98,14 +98,14 @@ func (db *DB) GetReviewByCommitSHA(sha string) (*Review, error) {
 		job.CommitSubject = commitSubject.String
 	}
 
-	r.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
-	job.EnqueuedAt, _ = time.Parse(time.RFC3339, enqueuedAt)
+	r.CreatedAt = parseSQLiteTime(createdAt)
+	job.EnqueuedAt = parseSQLiteTime(enqueuedAt)
 	if startedAt.Valid {
-		t, _ := time.Parse(time.RFC3339, startedAt.String)
+		t := parseSQLiteTime(startedAt.String)
 		job.StartedAt = &t
 	}
 	if finishedAt.Valid {
-		t, _ := time.Parse(time.RFC3339, finishedAt.String)
+		t := parseSQLiteTime(finishedAt.String)
 		job.FinishedAt = &t
 	}
 	if workerID.Valid {
@@ -141,7 +141,7 @@ func (db *DB) GetRecentReviewsForRepo(repoID int64, limit int) ([]Review, error)
 		if err := rows.Scan(&r.ID, &r.JobID, &r.Agent, &r.Prompt, &r.Output, &createdAt); err != nil {
 			return nil, err
 		}
-		r.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+		r.CreatedAt = parseSQLiteTime(createdAt)
 		reviews = append(reviews, r)
 	}
 
@@ -186,7 +186,7 @@ func (db *DB) GetResponsesForCommit(commitID int64) ([]Response, error) {
 		if err := rows.Scan(&r.ID, &r.CommitID, &r.Responder, &r.Response, &createdAt); err != nil {
 			return nil, err
 		}
-		r.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+		r.CreatedAt = parseSQLiteTime(createdAt)
 		responses = append(responses, r)
 	}
 
