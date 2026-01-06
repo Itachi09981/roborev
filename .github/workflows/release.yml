@@ -71,13 +71,23 @@ jobs:
         id: tag_message
         run: |
           # Get the tag message (our changelog), skipping the first line ("Release X.Y.Z")
-          TAG_MSG=$(git tag -l --format='%(contents:body)' ${GITHUB_REF#refs/tags/})
-          echo "body<<EOF" >> $GITHUB_OUTPUT
-          echo "$TAG_MSG" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          TAG_NAME="${GITHUB_REF#refs/tags/}"
+          TAG_MSG=$(git tag -l --format='%(contents:body)' "$TAG_NAME")
+
+          if [ -n "$TAG_MSG" ]; then
+            # Use unique delimiter to avoid conflicts with tag message content
+            DELIM="TAGMSG_$(date +%s%N)"
+            echo "body<<$DELIM" >> $GITHUB_OUTPUT
+            echo "$TAG_MSG" >> $GITHUB_OUTPUT
+            echo "$DELIM" >> $GITHUB_OUTPUT
+            echo "has_body=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_body=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           files: artifacts/*.tar.gz
-          body: ${{ steps.tag_message.outputs.body }}
+          body: ${{ steps.tag_message.outputs.has_body == 'true' && steps.tag_message.outputs.body || '' }}
+          generate_release_notes: ${{ steps.tag_message.outputs.has_body != 'true' }}
