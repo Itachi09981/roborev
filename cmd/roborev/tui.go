@@ -73,7 +73,8 @@ type tuiReviewMsg *storage.Review
 type tuiPromptMsg *storage.Review
 type tuiAddressedMsg bool
 type tuiAddressedResultMsg struct {
-	jobID      int64 // 0 for review view
+	jobID      int64 // job ID for queue view rollback
+	reviewID   int64 // review ID for review view rollback
 	reviewView bool  // true if from review view (rollback currentReview)
 	oldState   bool
 	err        error
@@ -201,28 +202,28 @@ func (m tuiModel) fetchReviewForPrompt(jobID int64) tea.Cmd {
 	}
 }
 
-func (m tuiModel) addressReview(reviewID int64, newState, oldState bool) tea.Cmd {
+func (m tuiModel) addressReview(reviewID, jobID int64, newState, oldState bool) tea.Cmd {
 	return func() tea.Msg {
 		reqBody, err := json.Marshal(map[string]interface{}{
 			"review_id": reviewID,
 			"addressed": newState,
 		})
 		if err != nil {
-			return tuiAddressedResultMsg{reviewView: true, oldState: oldState, err: err}
+			return tuiAddressedResultMsg{reviewID: reviewID, jobID: jobID, reviewView: true, oldState: oldState, err: err}
 		}
 		resp, err := m.client.Post(m.serverAddr+"/api/review/address", "application/json", bytes.NewReader(reqBody))
 		if err != nil {
-			return tuiAddressedResultMsg{reviewView: true, oldState: oldState, err: err}
+			return tuiAddressedResultMsg{reviewID: reviewID, jobID: jobID, reviewView: true, oldState: oldState, err: err}
 		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode == http.StatusNotFound {
-			return tuiAddressedResultMsg{reviewView: true, oldState: oldState, err: fmt.Errorf("review not found")}
+			return tuiAddressedResultMsg{reviewID: reviewID, jobID: jobID, reviewView: true, oldState: oldState, err: fmt.Errorf("review not found")}
 		}
 		if resp.StatusCode != http.StatusOK {
-			return tuiAddressedResultMsg{reviewView: true, oldState: oldState, err: fmt.Errorf("mark review: %s", resp.Status)}
+			return tuiAddressedResultMsg{reviewID: reviewID, jobID: jobID, reviewView: true, oldState: oldState, err: fmt.Errorf("mark review: %s", resp.Status)}
 		}
-		return tuiAddressedResultMsg{reviewView: true, oldState: oldState, err: nil}
+		return tuiAddressedResultMsg{reviewID: reviewID, jobID: jobID, reviewView: true, oldState: oldState, err: nil}
 	}
 }
 
@@ -469,15 +470,17 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				newState := !oldState
 				m.currentReview.Addressed = newState // Optimistic update
 				// Also update the job in queue so it's consistent when returning
+				var jobID int64
 				if m.currentReview.Job != nil {
+					jobID = m.currentReview.Job.ID
 					for i := range m.jobs {
-						if m.jobs[i].ID == m.currentReview.Job.ID && m.jobs[i].Addressed != nil {
+						if m.jobs[i].ID == jobID && m.jobs[i].Addressed != nil {
 							*m.jobs[i].Addressed = newState
 							break
 						}
 					}
 				}
-				return m, m.addressReview(m.currentReview.ID, newState, oldState)
+				return m, m.addressReview(m.currentReview.ID, jobID, newState, oldState)
 			} else if m.currentView == tuiViewQueue && len(m.jobs) > 0 && m.selectedIdx >= 0 && m.selectedIdx < len(m.jobs) {
 				job := &m.jobs[m.selectedIdx]
 				if job.Status == storage.JobStatusDone && job.Addressed != nil {
@@ -563,15 +566,16 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			// Rollback optimistic update on error
 			if msg.reviewView {
-				// Rollback review view and corresponding job in queue
-				if m.currentReview != nil {
+				// Rollback review view only if still viewing the same review
+				if m.currentReview != nil && m.currentReview.ID == msg.reviewID {
 					m.currentReview.Addressed = msg.oldState
-					if m.currentReview.Job != nil {
-						for i := range m.jobs {
-							if m.jobs[i].ID == m.currentReview.Job.ID && m.jobs[i].Addressed != nil {
-								*m.jobs[i].Addressed = msg.oldState
-								break
-							}
+				}
+				// Always rollback the job in queue (user may have navigated away)
+				if msg.jobID > 0 {
+					for i := range m.jobs {
+						if m.jobs[i].ID == msg.jobID && m.jobs[i].Addressed != nil {
+							*m.jobs[i].Addressed = msg.oldState
+							break
 						}
 					}
 				}

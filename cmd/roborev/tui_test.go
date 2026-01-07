@@ -106,7 +106,7 @@ func TestTUIAddressReviewSuccess(t *testing.T) {
 	defer ts.Close()
 
 	m := newTuiModel(ts.URL)
-	cmd := m.addressReview(42, true, false) // newState=true, oldState=false
+	cmd := m.addressReview(42, 100, true, false) // reviewID=42, jobID=100, newState=true, oldState=false
 	msg := cmd()
 
 	result, ok := msg.(tuiAddressedResultMsg)
@@ -119,6 +119,9 @@ func TestTUIAddressReviewSuccess(t *testing.T) {
 	if !result.reviewView {
 		t.Error("Expected reviewView to be true")
 	}
+	if result.reviewID != 42 {
+		t.Errorf("Expected reviewID=42, got %d", result.reviewID)
+	}
 }
 
 func TestTUIAddressReviewNotFound(t *testing.T) {
@@ -128,7 +131,7 @@ func TestTUIAddressReviewNotFound(t *testing.T) {
 	defer ts.Close()
 
 	m := newTuiModel(ts.URL)
-	cmd := m.addressReview(999, true, false) // newState=true, oldState=false
+	cmd := m.addressReview(999, 100, true, false) // reviewID=999, jobID=100, newState=true, oldState=false
 	msg := cmd()
 
 	result, ok := msg.(tuiAddressedResultMsg)
@@ -408,8 +411,9 @@ func TestTUIReviewViewAddressedRollbackOnError(t *testing.T) {
 	// Simulate optimistic update (what happens when 'a' is pressed in review view)
 	m.currentReview.Addressed = true
 
-	// Error result from server
+	// Error result from server (reviewID must match currentReview.ID for rollback)
 	errMsg := tuiAddressedResultMsg{
+		reviewID:   42, // Must match currentReview.ID
 		reviewView: true,
 		oldState:   false, // Was false before optimistic update
 		err:        fmt.Errorf("server error"),
@@ -453,5 +457,53 @@ func TestTUIReviewViewAddressedSuccessNoRollback(t *testing.T) {
 	}
 	if m.err != nil {
 		t.Errorf("Expected no error, got %v", m.err)
+	}
+}
+
+func TestTUIReviewViewNavigateAwayBeforeError(t *testing.T) {
+	m := newTuiModel("http://localhost")
+
+	// Setup: jobs in queue with addressed=false
+	addrA := false
+	addrB := false
+	m.jobs = []storage.ReviewJob{
+		{ID: 100, Status: storage.JobStatusDone, Addressed: &addrA}, // Job for review A
+		{ID: 200, Status: storage.JobStatusDone, Addressed: &addrB}, // Job for review B
+	}
+
+	// User views review A, toggles addressed (optimistic update)
+	m.currentView = tuiViewReview
+	m.currentReview = &storage.Review{ID: 42, Addressed: false, Job: &storage.ReviewJob{ID: 100}}
+	m.currentReview.Addressed = true  // Optimistic update to review
+	*m.jobs[0].Addressed = true       // Optimistic update to job in queue
+
+	// User navigates to review B before error response arrives
+	m.currentReview = &storage.Review{ID: 99, Addressed: false, Job: &storage.ReviewJob{ID: 200}}
+
+	// Error arrives for review A's toggle
+	errMsg := tuiAddressedResultMsg{
+		reviewID:   42,  // Review A
+		jobID:      100, // Job A
+		reviewView: true,
+		oldState:   false,
+		err:        fmt.Errorf("server error"),
+	}
+
+	updated, _ := m.Update(errMsg)
+	m = updated.(tuiModel)
+
+	// Review B should be unchanged (still false)
+	if m.currentReview.Addressed != false {
+		t.Errorf("Review B should be unchanged, got Addressed=%v", m.currentReview.Addressed)
+	}
+
+	// Job A in queue should be rolled back to false
+	if *m.jobs[0].Addressed != false {
+		t.Errorf("Job A should be rolled back, got Addressed=%v", *m.jobs[0].Addressed)
+	}
+
+	// Job B in queue should be unchanged
+	if *m.jobs[1].Addressed != false {
+		t.Errorf("Job B should be unchanged, got Addressed=%v", *m.jobs[1].Addressed)
 	}
 }
