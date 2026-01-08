@@ -24,6 +24,10 @@ type WorkerPool struct {
 	activeWorkers atomic.Int32
 	stopCh        chan struct{}
 	wg            sync.WaitGroup
+
+	// Track running jobs for cancellation
+	runningJobs   map[int64]context.CancelFunc
+	runningJobsMu sync.Mutex
 }
 
 // NewWorkerPool creates a new worker pool
@@ -34,6 +38,7 @@ func NewWorkerPool(db *storage.DB, cfg *config.Config, numWorkers int) *WorkerPo
 		promptBuilder: prompt.NewBuilder(db),
 		numWorkers:    numWorkers,
 		stopCh:        make(chan struct{}),
+		runningJobs:   make(map[int64]context.CancelFunc),
 	}
 }
 
@@ -58,6 +63,35 @@ func (wp *WorkerPool) Stop() {
 // ActiveWorkers returns the number of currently active workers
 func (wp *WorkerPool) ActiveWorkers() int {
 	return int(wp.activeWorkers.Load())
+}
+
+// CancelJob cancels a running job by its ID, killing the subprocess.
+// Returns true if the job was found and canceled, false if not running.
+func (wp *WorkerPool) CancelJob(jobID int64) bool {
+	wp.runningJobsMu.Lock()
+	cancel, ok := wp.runningJobs[jobID]
+	wp.runningJobsMu.Unlock()
+
+	if ok {
+		log.Printf("Canceling job %d", jobID)
+		cancel()
+		return true
+	}
+	return false
+}
+
+// registerRunningJob tracks a running job for potential cancellation
+func (wp *WorkerPool) registerRunningJob(jobID int64, cancel context.CancelFunc) {
+	wp.runningJobsMu.Lock()
+	wp.runningJobs[jobID] = cancel
+	wp.runningJobsMu.Unlock()
+}
+
+// unregisterRunningJob removes a job from the running jobs map
+func (wp *WorkerPool) unregisterRunningJob(jobID int64) {
+	wp.runningJobsMu.Lock()
+	delete(wp.runningJobs, jobID)
+	wp.runningJobsMu.Unlock()
 }
 
 func (wp *WorkerPool) worker(id int) {
@@ -105,6 +139,10 @@ func (wp *WorkerPool) processJob(workerID string, job *storage.ReviewJob) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
+	// Register for cancellation tracking
+	wp.registerRunningJob(job.ID, cancel)
+	defer wp.unregisterRunningJob(job.ID)
+
 	// Build the prompt
 	reviewPrompt, err := wp.promptBuilder.Build(job.RepoPath, job.GitRef, job.RepoID, wp.cfg.ReviewContextCount)
 	if err != nil {
@@ -136,6 +174,11 @@ func (wp *WorkerPool) processJob(workerID string, job *storage.ReviewJob) {
 	log.Printf("[%s] Running %s review...", workerID, agentName)
 	output, err := a.Review(ctx, job.RepoPath, job.GitRef, reviewPrompt)
 	if err != nil {
+		// Check if this was a cancellation
+		if ctx.Err() == context.Canceled {
+			log.Printf("[%s] Job %d was canceled", workerID, job.ID)
+			return // Job already marked as canceled in DB, nothing more to do
+		}
 		log.Printf("[%s] Agent error: %v", workerID, err)
 		wp.failOrRetry(workerID, job.ID, fmt.Sprintf("agent: %v", err))
 		return

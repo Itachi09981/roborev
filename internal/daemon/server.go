@@ -264,6 +264,7 @@ func (s *Server) handleCancelJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Cancel in DB first (marks as canceled)
 	if err := s.db.CancelJob(req.JobID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, http.StatusNotFound, "job not found or not cancellable")
@@ -272,6 +273,9 @@ func (s *Server) handleCancelJob(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("cancel job: %v", err))
 		return
 	}
+
+	// Also cancel the running worker if job was running (kills subprocess)
+	s.workerPool.CancelJob(req.JobID)
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true})
 }
