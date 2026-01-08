@@ -157,8 +157,14 @@ func (db *DB) migrate() error {
 	}
 	// Only migrate if the old constraint exists (doesn't include 'canceled')
 	if strings.Contains(tableSql, "CHECK(status IN ('queued','running','done','failed'))") {
-		// Recreate table with updated constraint
-		_, err = db.Exec(`
+		// Recreate table with updated constraint in a transaction for safety
+		tx, err := db.Begin()
+		if err != nil {
+			return fmt.Errorf("begin migration transaction: %w", err)
+		}
+		defer tx.Rollback()
+
+		_, err = tx.Exec(`
 			CREATE TABLE review_jobs_new (
 				id INTEGER PRIMARY KEY,
 				repo_id INTEGER NOT NULL REFERENCES repos(id),
@@ -173,16 +179,38 @@ func (db *DB) migrate() error {
 				error TEXT,
 				prompt TEXT,
 				retry_count INTEGER NOT NULL DEFAULT 0
-			);
-			INSERT INTO review_jobs_new SELECT * FROM review_jobs;
-			DROP TABLE review_jobs;
-			ALTER TABLE review_jobs_new RENAME TO review_jobs;
-			CREATE INDEX IF NOT EXISTS idx_review_jobs_status ON review_jobs(status);
-			CREATE INDEX IF NOT EXISTS idx_review_jobs_repo ON review_jobs(repo_id);
-			CREATE INDEX IF NOT EXISTS idx_review_jobs_git_ref ON review_jobs(git_ref);
+			)
 		`)
 		if err != nil {
-			return fmt.Errorf("migrate review_jobs for canceled status: %w", err)
+			return fmt.Errorf("create new review_jobs table: %w", err)
+		}
+
+		_, err = tx.Exec(`INSERT INTO review_jobs_new SELECT * FROM review_jobs`)
+		if err != nil {
+			return fmt.Errorf("copy review_jobs data: %w", err)
+		}
+
+		_, err = tx.Exec(`DROP TABLE review_jobs`)
+		if err != nil {
+			return fmt.Errorf("drop old review_jobs table: %w", err)
+		}
+
+		_, err = tx.Exec(`ALTER TABLE review_jobs_new RENAME TO review_jobs`)
+		if err != nil {
+			return fmt.Errorf("rename review_jobs table: %w", err)
+		}
+
+		_, err = tx.Exec(`
+			CREATE INDEX IF NOT EXISTS idx_review_jobs_status ON review_jobs(status);
+			CREATE INDEX IF NOT EXISTS idx_review_jobs_repo ON review_jobs(repo_id);
+			CREATE INDEX IF NOT EXISTS idx_review_jobs_git_ref ON review_jobs(git_ref)
+		`)
+		if err != nil {
+			return fmt.Errorf("recreate review_jobs indexes: %w", err)
+		}
+
+		if err = tx.Commit(); err != nil {
+			return fmt.Errorf("commit migration transaction: %w", err)
 		}
 	}
 
