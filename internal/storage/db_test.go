@@ -831,11 +831,29 @@ func TestMigrationWithAlterTableColumnOrder(t *testing.T) {
 		t.Errorf("Expected output 'test output', got '%s'", review.Output)
 	}
 
-	// Verify new constraint works
-	repo, _ := db.GetOrCreateRepo("/tmp/test2")
-	commit, _ := db.GetOrCreateCommit(repo.ID, "newsha", "A", "S", time.Now())
-	newJob, _ := db.EnqueueJob(repo.ID, commit.ID, "newsha", "codex")
-	db.ClaimJob("worker-1")
+	// Verify new constraint works by creating and canceling a job
+	repo2, err := db.GetOrCreateRepo("/tmp/test2")
+	if err != nil {
+		t.Fatalf("GetOrCreateRepo failed: %v", err)
+	}
+	commit2, err := db.GetOrCreateCommit(repo2.ID, "newsha", "A", "S", time.Now())
+	if err != nil {
+		t.Fatalf("GetOrCreateCommit failed: %v", err)
+	}
+	newJob, err := db.EnqueueJob(repo2.ID, commit2.ID, "newsha", "codex")
+	if err != nil {
+		t.Fatalf("EnqueueJob failed: %v", err)
+	}
+	claimed, err := db.ClaimJob("worker-1")
+	if err != nil {
+		t.Fatalf("ClaimJob failed: %v", err)
+	}
+	if claimed == nil || claimed.ID != newJob.ID {
+		t.Fatalf("Expected to claim job %d, got %v", newJob.ID, claimed)
+	}
+	if claimed.Status != JobStatusRunning {
+		t.Fatalf("Expected job status 'running', got '%s'", claimed.Status)
+	}
 	err = db.CancelJob(newJob.ID)
 	if err != nil {
 		t.Fatalf("CancelJob failed after migration: %v", err)
