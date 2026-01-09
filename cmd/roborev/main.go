@@ -77,7 +77,9 @@ func ensureDaemon() error {
 		if err == nil {
 			resp.Body.Close()
 
-			// Check version match
+			// Check version match - restart if versions differ
+			// For dirty builds, also restart if daemon is non-dirty (newer clean build)
+			// but don't restart if both are the same dirty version
 			if info.Version != version.Version {
 				if verbose {
 					fmt.Printf("Daemon version mismatch (daemon: %s, cli: %s), restarting...\n", info.Version, version.Version)

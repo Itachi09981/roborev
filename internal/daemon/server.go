@@ -37,6 +37,7 @@ func NewServer(db *storage.DB, cfg *config.Config) *Server {
 	mux.HandleFunc("/api/enqueue", s.handleEnqueue)
 	mux.HandleFunc("/api/jobs", s.handleListJobs)
 	mux.HandleFunc("/api/job/cancel", s.handleCancelJob)
+	mux.HandleFunc("/api/repos", s.handleListRepos)
 	mux.HandleFunc("/api/review", s.handleGetReview)
 	mux.HandleFunc("/api/review/address", s.handleAddressReview)
 	mux.HandleFunc("/api/respond", s.handleAddResponse)
@@ -232,15 +233,49 @@ func (s *Server) handleListJobs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	status := r.URL.Query().Get("status")
-	limit := 50 // default
+	repo := r.URL.Query().Get("repo")
 
-	jobs, err := s.db.ListJobs(status, limit)
+	// Parse limit from query, default to 50, 0 means no limit
+	// Clamp to valid range: 0 (unlimited) or 1-10000
+	const maxLimit = 10000
+	limit := 50
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if _, err := fmt.Sscanf(limitStr, "%d", &limit); err != nil {
+			limit = 50
+		}
+	}
+	// Clamp negative to 0, and cap at maxLimit (0 = unlimited is allowed)
+	if limit < 0 {
+		limit = 0
+	} else if limit > maxLimit {
+		limit = maxLimit
+	}
+
+	jobs, err := s.db.ListJobs(status, repo, limit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("list jobs: %v", err))
 		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{"jobs": jobs})
+}
+
+func (s *Server) handleListRepos(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	repos, totalCount, err := s.db.ListReposWithReviewCounts()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("list repos: %v", err))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"repos":       repos,
+		"total_count": totalCount,
+	})
 }
 
 type CancelJobRequest struct {
@@ -384,6 +419,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	status := storage.DaemonStatus{
+		Version:       version.Version,
 		QueuedJobs:    queued,
 		RunningJobs:   running,
 		CompletedJobs: done,
