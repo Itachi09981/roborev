@@ -1,23 +1,32 @@
 #!/bin/bash
 # Generate a changelog since the last release using codex
-# Usage: ./scripts/changelog.sh [version] [extra_instructions]
+# Usage: ./scripts/changelog.sh [version] [start_tag] [extra_instructions]
 # If version is not provided, uses "NEXT" as placeholder
+# If start_tag is "-" or empty, auto-detects the previous tag
 
 set -e
 
 VERSION="${1:-NEXT}"
-EXTRA_INSTRUCTIONS="$2"
+START_TAG="$2"
+EXTRA_INSTRUCTIONS="$3"
 
-# Find the previous tag
-PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-if [ -z "$PREV_TAG" ]; then
-    # No previous tag, use first commit
-    FIRST_COMMIT=$(git rev-list --max-parents=0 HEAD)
-    RANGE="$FIRST_COMMIT..HEAD"
-    echo "No previous release found. Generating changelog for all commits..." >&2
+# Determine the starting point
+if [ -n "$START_TAG" ] && [ "$START_TAG" != "-" ]; then
+    # Use provided start tag
+    RANGE="$START_TAG..HEAD"
+    echo "Generating changelog from $START_TAG to HEAD..." >&2
 else
-    RANGE="$PREV_TAG..HEAD"
-    echo "Generating changelog from $PREV_TAG to HEAD..." >&2
+    # Auto-detect previous tag
+    PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+    if [ -z "$PREV_TAG" ]; then
+        # No previous tag, use first commit
+        FIRST_COMMIT=$(git rev-list --max-parents=0 HEAD)
+        RANGE="$FIRST_COMMIT..HEAD"
+        echo "No previous release found. Generating changelog for all commits..." >&2
+    else
+        RANGE="$PREV_TAG..HEAD"
+        echo "Generating changelog from $PREV_TAG to HEAD..." >&2
+    fi
 fi
 
 # Get commit log for changelog generation
