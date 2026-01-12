@@ -99,13 +99,63 @@ func checkClauseForCaveat(clause string) bool {
 		"problem statement", "problem domain", "problem space", "problem definition",
 		"issue tracker", "issue tracking", "issue number", "issue #",
 		"vulnerability disclosure", "vulnerability report", "vulnerability scan",
+		"error handling", "error message", "error messages", "error code", "error codes",
+		"error type", "error types", "error response", "error responses",
 	}
+	// Negative qualifiers that indicate the benign phrase is actually a problem
+	negativeQualifiers := []string{
+		"is missing", "are missing", "missing",
+		"is wrong", "are wrong", "wrong",
+		"is incorrect", "are incorrect", "incorrect",
+		"is broken", "are broken", "broken",
+		"is bad", "are bad",
+		"need", "needs", "needed",
+	}
+	// Process each benign phrase, checking each occurrence individually
 	for _, bp := range benignPhrases {
-		if strings.Contains(lc, bp) {
-			// Remove benign phrase to avoid false positives
-			lc = strings.ReplaceAll(lc, bp, "")
+		var result strings.Builder
+		remaining := lc
+		for {
+			idx := strings.Index(remaining, bp)
+			if idx < 0 {
+				result.WriteString(remaining)
+				break
+			}
+			// Copy everything before the match
+			result.WriteString(remaining[:idx])
+			afterPhrase := remaining[idx+len(bp):]
+
+			// Check if this is a complete phrase (followed by boundary or end)
+			isCompleteBoundary := len(afterPhrase) == 0 ||
+				afterPhrase[0] == ' ' || afterPhrase[0] == '.' ||
+				afterPhrase[0] == ',' || afterPhrase[0] == ';' || afterPhrase[0] == ':'
+
+			// Check if followed by negative qualifier
+			hasNegative := false
+			if isCompleteBoundary {
+				for _, nq := range negativeQualifiers {
+					if strings.HasPrefix(strings.TrimSpace(afterPhrase), nq) {
+						hasNegative = true
+						break
+					}
+				}
+			}
+
+			// Only remove if complete boundary match AND no negative qualifier
+			if isCompleteBoundary && !hasNegative {
+				result.WriteString(" ") // Replace with space
+			} else {
+				result.WriteString(bp) // Keep the phrase
+			}
+			remaining = afterPhrase
 		}
+		lc = result.String()
 	}
+	// Collapse multiple spaces after removals
+	for strings.Contains(lc, "  ") {
+		lc = strings.ReplaceAll(lc, "  ", " ")
+	}
+	lc = strings.TrimSpace(lc)
 
 	// Check for "found <issue>" pattern - handle both mid-clause and start-of-clause
 	issueKeywords := []string{
@@ -258,7 +308,7 @@ func checkClauseForCaveat(clause string) bool {
 		return false
 	}
 
-	words := strings.Fields(normalized)
+	words := strings.Fields(lc)
 	for i, w := range words {
 		// Strip punctuation from both sides for word matching
 		w = strings.Trim(w, ".,;:!?()[]\"'")

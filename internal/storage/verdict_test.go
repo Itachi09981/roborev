@@ -235,6 +235,66 @@ func TestParseVerdict(t *testing.T) {
 			want:   "P",
 		},
 		{
+			name:   "error handling in description is pass",
+			output: "No issues found. The commit hardens the test setup with error handling around filesystem operations.",
+			want:   "P",
+		},
+		{
+			name:   "error messages in description is pass",
+			output: "No issues found. The code improves error messages for better debugging.",
+			want:   "P",
+		},
+		{
+			name:   "error handling is missing is fail",
+			output: "No issues found. Error handling is missing in the auth module.",
+			want:   "F",
+		},
+		{
+			name:   "error codes are wrong is fail",
+			output: "No issues found. Error codes are wrong in the API response.",
+			want:   "F",
+		},
+		{
+			name:   "error message needs improvement is fail",
+			output: "No issues found. The error message needs to be more descriptive.",
+			want:   "F",
+		},
+		{
+			name:   "error handling is broken is fail",
+			output: "No issues found. Error handling is broken after refactor.",
+			want:   "F",
+		},
+		{
+			name:   "mixed polarity error handling - positive then negative is fail",
+			output: "No issues found. Error handling improved, but error handling is missing in auth.",
+			want:   "F",
+		},
+		{
+			name:   "mixed polarity error handling - negative then positive is fail",
+			output: "No issues found. Error handling is broken, though error handling in utils is good.",
+			want:   "F",
+		},
+		{
+			name:   "multiple occurrences all positive is pass",
+			output: "No issues found. Error handling added to auth. Error handling also improved in utils.",
+			want:   "P",
+		},
+		{
+			name:   "partial word match problem domains is pass",
+			output: "No issues found. The problem domains are well-defined.",
+			want:   "P",
+		},
+		{
+			name:   "partial word match errorhandling is pass",
+			output: "No issues found. The errorhandling module works well.",
+			want:   "P",
+		},
+		{
+			name:   "problem domain vs problem domains mixed is pass",
+			output: "No issues found. The problem domain is clear, and the problem domains are complex.",
+			want:   "P",
+		},
+		{
 			name:   "no problems exist is pass",
 			output: "No issues found. No problems exist.",
 			want:   "P",
